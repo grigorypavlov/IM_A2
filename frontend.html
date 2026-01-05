@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <title>PaymentToken & NFTMinter Demo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Ethers v6 Browser Bundle -->
+    <script src="https://unpkg.com/ethers@6.13.1/dist/ethers.umd.min.js"></script>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+        margin: 2rem;
+        background: #0f172a;
+        color: #e5e7eb;
+      }
+      h1,
+      h2 {
+        color: #f97316;
+      }
+      .card {
+        border: 1px solid #1f2937;
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        background: #020617;
+        box-shadow: 0 0 0 1px #111827;
+        max-width: 640px;
+      }
+      button {
+        cursor: pointer;
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        border: none;
+        background: #f97316;
+        color: #020617;
+        font-weight: 600;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      input {
+        padding: 0.4rem 0.5rem;
+        border-radius: 0.5rem;
+        border: 1px solid #4b5563;
+        background: #020617;
+        color: #e5e7eb;
+      }
+      label {
+        display: block;
+        margin-bottom: 0.25rem;
+        font-size: 0.9rem;
+        color: #9ca3af;
+      }
+      .row {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+        margin-top: 0.5rem;
+        flex-wrap: wrap;
+      }
+      .small {
+        font-size: 0.9rem;
+        color: #9ca3af;
+      }
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
+      }
+      .status {
+        margin-top: 0.5rem;
+        font-size: 0.9rem;
+      }
+      a {
+        color: #60a5fa;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>PaymentToken & NFTMinter Demo</h1>
+    <p class="small">
+      Läuft Hardhat-Node auf
+      <span class="mono">http://127.0.0.1:8545</span> (Chain ID 31337) und
+      verbinde MetaMask mit dieser Chain.
+    </p>
+
+    <div class="card">
+      <h2>1. Wallet verbinden</h2>
+      <button id="connectBtn">Mit MetaMask verbinden</button>
+      <div class="status" id="connectStatus"></div>
+      <p class="small">
+        PaymentToken: <span class="mono" id="payAddr">-</span><br />
+        NFTMinter: <span class="mono" id="nftAddr">-</span>
+      </p>
+      <p class="small">
+        Deine Adresse: <span class="mono" id="account">-</span><br />
+        ETH-Balance: <span class="mono" id="ethBalance">-</span><br />
+        PAY-Balance: <span class="mono" id="payBalance">-</span><br />
+        NFT-Balance: <span class="mono" id="nftBalance">-</span>
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>2. PaymentToken kaufen</h2>
+      <p class="small">
+        Kurs: 1 ETH = 1000 PAY. (Contract errechnet das automatisch)
+      </p>
+      <div class="row">
+        <div>
+          <label for="ethAmount">ETH Betrag</label>
+          <input id="ethAmount" type="text" value="0.1" />
+        </div>
+        <button id="buyBtn" disabled>PAY kaufen</button>
+      </div>
+      <div class="status" id="buyStatus"></div>
+    </div>
+
+    <div class="card">
+      <h2>3. NFT minten (50 PAY)</h2>
+      <p class="small">
+        Ablauf: Zuerst 50 PAY fr NFTMinter approven, dann NFT mit URI minten.
+      </p>
+      <div class="row">
+        <button id="approveBtn" disabled>50 PAY approven</button>
+        <span class="small">bentigter Allowance-Call auf PaymentToken</span>
+      </div>
+      <div class="row" style="margin-top: 1rem">
+        <div style="flex: 1 1 240px">
+          <label for="tokenUri">Token URI (z.B. ipfs://...)</label>
+          <input
+            id="tokenUri"
+            type="text"
+            style="width: 100%"
+            value="ipfs://example-token-uri"
+          />
+        </div>
+        <button id="mintBtn" disabled>NFT minten</button>
+      </div>
+      <div class="status" id="mintStatus"></div>
+    </div>
+
+    <script>
+      // Adressen aus deinem Ignition-Deploy (chain-31337)
+      const PAYMENT_TOKEN_ADDRESS =
+        "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707";
+      const NFT_MINTER_ADDRESS = "0x0165878A594ca255338adfa4d48449f69242Eb8F";
+
+      // Minimal-ABIs nur mit den Funktionen, die wir brauchen
+      const paymentTokenAbi = [
+        {
+          type: "function",
+          name: "buyTokens",
+          stateMutability: "payable",
+          inputs: [],
+          outputs: [],
+        },
+        {
+          type: "function",
+          name: "balanceOf",
+          stateMutability: "view",
+          inputs: [{ name: "account", type: "address" }],
+          outputs: [{ type: "uint256" }],
+        },
+        {
+          type: "function",
+          name: "approve",
+          stateMutability: "nonpayable",
+          inputs: [
+            { name: "spender", type: "address" },
+            { name: "amount", type: "uint256" },
+          ],
+          outputs: [{ type: "bool" }],
+        },
+      ];
+
+      const nftMinterAbi = [
+        {
+          type: "function",
+          name: "mintNFT",
+          stateMutability: "nonpayable",
+          inputs: [
+            { name: "to", type: "address" },
+            { name: "tokenURI", type: "string" },
+          ],
+          outputs: [],
+        },
+        {
+          type: "function",
+          name: "balanceOf",
+          stateMutability: "view",
+          inputs: [{ name: "owner", type: "address" }],
+          outputs: [{ type: "uint256" }],
+        },
+      ];
+
+      const connectBtn = document.getElementById("connectBtn");
+      const connectStatus = document.getElementById("connectStatus");
+      const payAddrSpan = document.getElementById("payAddr");
+      const nftAddrSpan = document.getElementById("nftAddr");
+      const accountSpan = document.getElementById("account");
+      const ethBalanceSpan = document.getElementById("ethBalance");
+      const payBalanceSpan = document.getElementById("payBalance");
+      const nftBalanceSpan = document.getElementById("nftBalance");
+
+      const buyBtn = document.getElementById("buyBtn");
+      const buyStatus = document.getElementById("buyStatus");
+      const ethAmountInput = document.getElementById("ethAmount");
+
+      const approveBtn = document.getElementById("approveBtn");
+      const mintBtn = document.getElementById("mintBtn");
+      const mintStatus = document.getElementById("mintStatus");
+      const tokenUriInput = document.getElementById("tokenUri");
+
+      let provider, signer, userAddress;
+      let paymentTokenContract, nftMinterContract;
+
+      payAddrSpan.textContent = PAYMENT_TOKEN_ADDRESS;
+      nftAddrSpan.textContent = NFT_MINTER_ADDRESS;
+
+      async function refreshBalances() {
+        if (
+          !provider ||
+          !userAddress ||
+          !paymentTokenContract ||
+          !nftMinterContract
+        )
+          return;
+        try {
+          const ethBal = await provider.getBalance(userAddress);
+          ethBalanceSpan.textContent = ethers.formatEther(ethBal) + " ETH";
+
+          const payBal = await paymentTokenContract.balanceOf(userAddress);
+          payBalanceSpan.textContent = ethers.formatUnits(payBal, 18) + " PAY";
+
+          const nftBal = await nftMinterContract.balanceOf(userAddress);
+          nftBalanceSpan.textContent = nftBal.toString() + " NFTs";
+        } catch (err) {
+          console.error(err);
+        }
+      }
+
+      connectBtn.onclick = async () => {
+        if (typeof window.ethers === "undefined") {
+          connectStatus.textContent =
+            "ethers.js konnte nicht geladen werden (CDN). Prüfe deine Internetverbindung und lade die Seite neu.";
+          return;
+        }
+
+        if (!window.ethereum) {
+          connectStatus.textContent =
+            "Kein MetaMask / window.ethereum gefunden.";
+          return;
+        }
+        try {
+          connectStatus.textContent = "Verbinde...";
+          await window.ethereum.request({ method: "eth_requestAccounts" });
+
+          provider = new ethers.BrowserProvider(window.ethereum);
+          signer = await provider.getSigner();
+          userAddress = await signer.getAddress();
+
+          paymentTokenContract = new ethers.Contract(
+            PAYMENT_TOKEN_ADDRESS,
+            paymentTokenAbi,
+            signer
+          );
+          nftMinterContract = new ethers.Contract(
+            NFT_MINTER_ADDRESS,
+            nftMinterAbi,
+            signer
+          );
+
+          accountSpan.textContent = userAddress;
+          connectStatus.textContent = "Verbunden.";
+          buyBtn.disabled = false;
+          approveBtn.disabled = false;
+          mintBtn.disabled = false;
+
+          await refreshBalances();
+        } catch (err) {
+          console.error(err);
+          connectStatus.textContent =
+            "Fehler beim Verbinden: " + (err.message || err);
+        }
+      };
+
+      buyBtn.onclick = async () => {
+        if (!paymentTokenContract) return;
+        try {
+          buyStatus.textContent = "Sende Transaktion...";
+          const ethStr = ethAmountInput.value.trim();
+          const value = ethers.parseEther(ethStr || "0");
+          const tx = await paymentTokenContract.buyTokens({ value });
+          await tx.wait();
+          buyStatus.textContent =
+            "Tokens gekauft (TX: " + tx.hash.slice(0, 10) + "...)";
+          await refreshBalances();
+        } catch (err) {
+          console.error(err);
+          buyStatus.textContent =
+            "Fehler: " + (err.reason || err.message || err);
+        }
+      };
+
+      approveBtn.onclick = async () => {
+        if (!paymentTokenContract) return;
+        try {
+          mintStatus.textContent = "Approving 50 PAY...";
+          const amount = ethers.parseUnits("50", 18);
+          const tx = await paymentTokenContract.approve(
+            NFT_MINTER_ADDRESS,
+            amount
+          );
+          await tx.wait();
+          mintStatus.textContent =
+            "Approve OK (TX: " + tx.hash.slice(0, 10) + "...)";
+        } catch (err) {
+          console.error(err);
+          mintStatus.textContent =
+            "Fehler bei approve: " + (err.reason || err.message || err);
+        }
+      };
+
+      mintBtn.onclick = async () => {
+        if (!nftMinterContract || !userAddress) return;
+        try {
+          const uri = tokenUriInput.value.trim();
+          if (!uri) {
+            mintStatus.textContent = "Bitte eine Token URI angeben.";
+            return;
+          }
+          mintStatus.textContent = "Minting NFT...";
+          const tx = await nftMinterContract.mintNFT(userAddress, uri);
+          await tx.wait();
+          mintStatus.textContent =
+            "NFT gemintet (TX: " + tx.hash.slice(0, 10) + "...)";
+          await refreshBalances();
+        } catch (err) {
+          console.error(err);
+          mintStatus.textContent =
+            "Fehler beim Minten: " + (err.reason || err.message || err);
+        }
+      };
+    </script>
+  </body>
+</html>
