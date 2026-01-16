@@ -1,0 +1,39 @@
+{
+  "_format": "hh3-sol-build-info-1",
+  "id": "solc-0_8_28-5c40aee2597597c42fd7b72f7c73be258885fba2",
+  "solcVersion": "0.8.28",
+  "solcLongVersion": "0.8.28+commit.7893614a",
+  "userSourceNameMap": {
+    "contracts/PaymentToken.sol": "project/contracts/PaymentToken.sol"
+  },
+  "input": {
+    "language": "Solidity",
+    "settings": {
+      "evmVersion": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "outputSelection": {
+        "*": {
+          "": [
+            "ast"
+          ],
+          "*": [
+            "abi",
+            "evm.bytecode",
+            "evm.deployedBytecode",
+            "evm.methodIdentifiers",
+            "metadata"
+          ]
+        }
+      },
+      "remappings": []
+    },
+    "sources": {
+      "project/contracts/PaymentToken.sol": {
+        "content": "// SPDX-License-Identifier: MIT\r\npragma solidity ^0.8.28;\r\n\r\ncontract PaymentToken {\r\n    // ERC20 Standard-Daten\r\n    string private _name = \"PaymentToken\";\r\n    string private _symbol = \"PAY\";\r\n    uint8 private _decimals = 18;\r\n    \r\n    uint256 private _totalSupply;\r\n    mapping(address => uint256) private _balances;\r\n    mapping(address => mapping(address => uint256)) private _allowances;\r\n\r\n    uint256 public constant TOKENS_PER_ETH = 1000;\r\n\r\n    event Transfer(address indexed from, address indexed to, uint256 value);\r\n    event Approval(address indexed owner, address indexed spender, uint256 value);\r\n\r\n    constructor() {\r\n        uint256 initialSupply = 1_000_000 * 10 ** _decimals;\r\n        _totalSupply = initialSupply;\r\n        _balances[address(this)] = initialSupply;\r\n        emit Transfer(address(0), address(this), initialSupply);\r\n    }\r\n\r\n    // ERC20 Standard-Getters\r\n    function name() public view returns (string memory) {\r\n        return _name;\r\n    }\r\n    \r\n    function symbol() public view returns (string memory) {\r\n        return _symbol;\r\n    }\r\n    \r\n    function decimals() public view returns (uint8) {\r\n        return _decimals;\r\n    }\r\n    \r\n    function totalSupply() public view returns (uint256) {\r\n        return _totalSupply;\r\n    }\r\n    \r\n    function balanceOf(address account) public view returns (uint256) {\r\n        return _balances[account];\r\n    }\r\n    \r\n    function allowance(address owner, address spender) public view returns (uint256) {\r\n        return _allowances[owner][spender];\r\n    }\r\n\r\n    // PaymentToken-spezifische Funktion\r\n    function buyTokens() external payable {\r\n        require(msg.value > 0, \"No ETH sent\");\r\n        uint256 tokenAmount = msg.value * TOKENS_PER_ETH;\r\n        require(_balances[address(this)] >= tokenAmount, \"Not enough tokens\");\r\n\r\n        _balances[address(this)] -= tokenAmount;\r\n        _balances[msg.sender] += tokenAmount;\r\n\r\n        emit Transfer(address(this), msg.sender, tokenAmount);\r\n    }\r\n\r\n    // ERC20 Standard-Funktionen\r\n    function approve(address spender, uint256 amount) external returns (bool) {\r\n        _allowances[msg.sender][spender] = amount;\r\n        emit Approval(msg.sender, spender, amount);\r\n        return true;\r\n    }\r\n\r\n    function transfer(address to, uint256 amount) external returns (bool) {\r\n        require(_balances[msg.sender] >= amount, \"Balance too low\");\r\n        _balances[msg.sender] -= amount;\r\n        _balances[to] += amount;\r\n        emit Transfer(msg.sender, to, amount);\r\n        return true;\r\n    }\r\n\r\n    function transferFrom(\r\n        address from,\r\n        address to,\r\n        uint256 amount\r\n    ) external returns (bool) {\r\n        require(_balances[from] >= amount, \"Balance too low\");\r\n        require(_allowances[from][msg.sender] >= amount, \"Allowance too low\");\r\n\r\n        _allowances[from][msg.sender] -= amount;\r\n        _balances[from] -= amount;\r\n        _balances[to] += amount;\r\n\r\n        emit Transfer(from, to, amount);\r\n        return true;\r\n    }\r\n}"
+      }
+    }
+  }
+}

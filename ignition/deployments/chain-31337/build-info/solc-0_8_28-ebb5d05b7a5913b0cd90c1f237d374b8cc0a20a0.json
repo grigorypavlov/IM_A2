@@ -1,0 +1,39 @@
+{
+  "_format": "hh3-sol-build-info-1",
+  "id": "solc-0_8_28-ebb5d05b7a5913b0cd90c1f237d374b8cc0a20a0",
+  "solcVersion": "0.8.28",
+  "solcLongVersion": "0.8.28+commit.7893614a",
+  "userSourceNameMap": {
+    "contracts/NFTMinter.sol": "project/contracts/NFTMinter.sol"
+  },
+  "input": {
+    "language": "Solidity",
+    "settings": {
+      "evmVersion": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "outputSelection": {
+        "*": {
+          "": [
+            "ast"
+          ],
+          "*": [
+            "abi",
+            "evm.bytecode",
+            "evm.deployedBytecode",
+            "evm.methodIdentifiers",
+            "metadata"
+          ]
+        }
+      },
+      "remappings": []
+    },
+    "sources": {
+      "project/contracts/NFTMinter.sol": {
+        "content": "// SPDX-License-Identifier: MIT\r\npragma solidity ^0.8.28;\r\n\r\ninterface IPaymentToken {\r\n    function transferFrom(address from, address to, uint256 amount) external returns (bool);\r\n}\r\n\r\ncontract NFTMinter {\r\n    string public name = \"PaymentNFT\";\r\n    string public symbol = \"PNFT\";\r\n    uint256 public constant NFT_PRICE = 50 * 10 ** 18;\r\n\r\n    IPaymentToken public paymentToken;\r\n    uint256 private _tokenIdCounter;\r\n\r\n    mapping(uint256 => address) public ownerOf;\r\n    mapping(address => uint256) public balanceOf;\r\n    mapping(uint256 => string) public tokenURI;\r\n\r\n    event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);\r\n\r\n    constructor(address paymentTokenAddress) {\r\n        paymentToken = IPaymentToken(paymentTokenAddress);\r\n    }\r\n\r\n    function mintNFT(address to, string calldata uri) external {\r\n        require(to != address(0), \"Invalid address\");\r\n\r\n        bool success = paymentToken.transferFrom(\r\n            msg.sender,\r\n            address(this),\r\n            NFT_PRICE\r\n        );\r\n        require(success, \"Payment failed\");\r\n\r\n        _tokenIdCounter++;\r\n        uint256 tokenId = _tokenIdCounter;\r\n\r\n        ownerOf[tokenId] = to;\r\n        balanceOf[to] += 1;\r\n        tokenURI[tokenId] = uri;\r\n\r\n        emit Transfer(address(0), to, tokenId);\r\n    }\r\n}"
+      }
+    }
+  }
+}
